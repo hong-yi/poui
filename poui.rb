@@ -1,9 +1,7 @@
 class Poui < Formula
   desc "Open your development web consoles with a single command"
   homepage "https://github.com/hong-yi/poui"
-  url "https://github.com/hong-yi/poui.git",
-    tag: "v0.1.0",
-    revision: "36f67961af8bbe8992632bafc62521e4b71a4433"
+  url "https://github.com/hong-yi/poui.git"
   license "MIT"
   head "https://github.com/hong-yi/poui.git", branch: "main"
 
