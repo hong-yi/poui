@@ -4,8 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"github.com/go-git/go-git/v5"
+	"github.com/pkg/errors"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"ruopen/handlers"
 	"ruopen/tui"
 )
@@ -33,8 +35,18 @@ func main() {
 	}
 
 	if *openTfc || *openAll {
-		tfeUrls := handlers.GetTfeWorkspaceUrls(path, *maxDepth)
+		tfeUrls, erroredUrls := handlers.GetTfeWorkspaceUrls(path, *maxDepth)
 		slog.Debug(fmt.Sprintf("%v", tfeUrls))
+
+		if len(erroredUrls) > 0 {
+			fmt.Println(tui.WarningStyle.Render("[WARN] the following tfstate files were unable to be parsed: \n"))
+			for _, url := range erroredUrls {
+				fmt.Println(fmt.Sprintf("\t- %s", url))
+			}
+			fmt.Println()
+			fmt.Println("Trying any remaining workspaces...")
+			fmt.Println()
+		}
 
 		if len(tfeUrls) < 1 {
 			fmt.Println(tui.WarningStyle.Render("Unable to find any tfstate.\n\nPlease run `terraform init` and try again."))
@@ -56,12 +68,14 @@ func main() {
 
 	// for git
 	if *openGit || *openAll {
-		r, err := git.PlainOpen(path)
+		tld, err := findTopLevelGitDir(path)
+		slog.Debug(tld)
 		if err != nil {
 			slog.Error(fmt.Sprintf("%v", err))
 			fmt.Println(tui.WarningStyle.Render("Unable to find any repositories.\n\nPlease run `git init` and try again."))
 			return
 		}
+		r, err := git.PlainOpen(tld)
 		rr, err := r.Remotes()
 		if err != nil {
 			slog.Error(fmt.Sprintf("%v", err))
@@ -87,5 +101,24 @@ func main() {
 				return
 			}
 		}
+	}
+}
+
+func findTopLevelGitDir(workingDir string) (string, error) {
+	dir, err := filepath.Abs(workingDir)
+	if err != nil {
+		return "", errors.Wrap(err, "invalid working dir")
+	}
+
+	for {
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			return dir, nil
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", errors.New("no git repository found")
+		}
+		dir = parent
 	}
 }

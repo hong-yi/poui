@@ -12,19 +12,25 @@ import (
 	"strings"
 )
 
-func GetTfeWorkspaceUrls(tfPath string, maxDepth int) []string {
+func GetTfeWorkspaceUrls(tfPath string, maxDepth int) ([]string, []string) {
+	var tfeWorkspaceUrls, erroredPaths []string
 	tfstatePaths := scanTfeDir(tfPath, maxDepth)
-	tfeWorkspaceUrls := []string{}
 	for _, path := range tfstatePaths {
 		tfState, err := parseTfState(path)
+		if err != nil {
+			slog.Error(fmt.Sprintf("unable to parse tfstate: %v", err))
+			erroredPaths = append(erroredPaths, path)
+			continue
+		}
 		workspaceUrl, err := getWorkspaceUrl(tfState)
 		if err != nil {
 			slog.Error(fmt.Sprintf("unable to parse tfstate: %v", err))
-			return nil
+			erroredPaths = append(erroredPaths, path)
+			continue
 		}
 		tfeWorkspaceUrls = append(tfeWorkspaceUrls, *workspaceUrl)
 	}
-	return tfeWorkspaceUrls
+	return tfeWorkspaceUrls, erroredPaths
 }
 
 func scanTfeDir(tfPath string, maxDepth int) []string {
@@ -47,7 +53,7 @@ func scanTfeDir(tfPath string, maxDepth int) []string {
 }
 
 func getWorkspaceUrl(tfState *models.TfState) (*string, error) {
-	if tfState.Backend.Type != "cloud" {
+	if tfState != nil && tfState.Backend.Type != "cloud" {
 		return nil, errors.New("ERR_NOT_TFE")
 	}
 
